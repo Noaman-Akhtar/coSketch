@@ -1,9 +1,9 @@
 {
   "name": "@repo/common",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "./src/types.ts",
   "exports":{
-    "./types":"./src/types"
+    "./types":"./src/types.ts"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
