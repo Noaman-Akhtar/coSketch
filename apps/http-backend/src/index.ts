@@ -1,17 +1,20 @@
 import express from "express";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "./config";  
+import { JWT_SECRET } from "./config";
 import { middleware } from "./middleware";
+import bcrypt from "bcrypt";
 import { prismaClient } from "@repo/db";
-import { CreateUserSchema, SigninSchema } from "@repo/common/types";
+import { CreateUserSchema, SigninSchema, CreateRoomSchema } from "@repo/common/types";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 app.post("/signup", async (req, res) => {
     try {
         const parsedData = CreateUserSchema.safeParse(req.body);
-        
+
         if (!parsedData.success) {
             res.status(400).json({ error: "Invalid input", details: parsedData.error.issues });
             return;
@@ -28,22 +31,22 @@ app.post("/signup", async (req, res) => {
             res.status(400).json({ error: "User already exists" });
             return;
         }
-
+        const hashedPassword = await bcrypt.hash(password,10);
         // Create new user
         const user = await prismaClient.user.create({
             data: {
                 email,
-                password, // Note: In production, hash the password!
+                password:hashedPassword, // Note: In production, hash the password!
                 name
             }
         });
 
         const token = jwt.sign({ userId: user.id }, JWT_SECRET);
 
-        res.json({ 
+        res.json({
             message: "User created successfully",
             token,
-            userId: user.id 
+            userId: user.id
         });
     } catch (error) {
         console.error("Signup error:", error);
@@ -54,7 +57,7 @@ app.post("/signup", async (req, res) => {
 app.post("/signin", async (req, res) => {
     try {
         const parsedData = SigninSchema.safeParse(req.body);
-        
+
         if (!parsedData.success) {
             res.status(400).json({ error: "Invalid input", details: parsedData.error.issues });
             return;
@@ -70,7 +73,13 @@ app.post("/signin", async (req, res) => {
             res.status(401).json({ error: "Invalid credentials" });
             return;
         }
-
+        const isPasswordValid = await bcrypt.compare(password,user.password);
+            if(!isPasswordValid){
+                res.status(401).json({
+                    error:"Invalid credentials"
+                })
+                return ;
+            }
         const token = jwt.sign({ userId: user.id }, JWT_SECRET);
 
         res.json({ token });
@@ -80,7 +89,30 @@ app.post("/signin", async (req, res) => {
     }
 })
 
-app.post("/room", middleware, (req, res) => {
+app.post("/room", middleware, async (req, res) => {
+    const parsedData = CreateRoomSchema.safeParse(req.body);
+    if (!parsedData.success) {
+        res.json({
+            message: "Incorrect inputs"
+        })
+        return;
+    }
+    const userId = req.userId as string;
+    try {
+        const room = await prismaClient.room.create({
+            data: {
+                slug: parsedData.data.name,
+                adminId: userId
+            }
+        })
+        res.json({
+            roomId: room.id
+        })
+    } catch (e) {
+        res.status(411).json({
+            message: "Room already exists with this name"
+        })
+    }
 
 })
 
