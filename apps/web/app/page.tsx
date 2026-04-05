@@ -1,102 +1,120 @@
-import Image, { type ImageProps } from "next/image";
-import { Button } from "@repo/ui/button";
-import styles from "./page.module.css";
+"use client";
 
-type Props = Omit<ImageProps, "src"> & {
-  srcLight: string;
-  srcDark: string;
-};
+import { useEffect, useMemo, useState } from "react";
+import { useHybridBoard } from "./hooks/useHybridBoard";
 
-const ThemeImage = (props: Props) => {
-  const { srcLight, srcDark, ...rest } = props;
+const TOKEN_STORAGE_KEY = "hybrid-board:token";
+const USER_STORAGE_KEY = "hybrid-board:userId";
 
-  return (
-    <>
-      <Image {...rest} src={srcLight} className="imgLight" />
-      <Image {...rest} src={srcDark} className="imgDark" />
-    </>
-  );
-};
+function getStatusLabel(status: "local" | "connecting" | "syncing" | "live") {
+  if (status === "local") return "Local mode";
+  if (status === "connecting") return "Connecting";
+  if (status === "syncing") return "Syncing";
+  return "Live";
+}
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <ThemeImage
-          className={styles.logo}
-          srcLight="turborepo-dark.svg"
-          srcDark="turborepo-light.svg"
-          alt="Turborepo logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>apps/web/app/page.tsx</code>
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [token, setToken] = useState("");
+  const [userId, setUserId] = useState("");
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new/clone?demo-description=Learn+to+implement+a+monorepo+with+a+two+Next.js+sites+that+has+installed+three+local+packages.&demo-image=%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2F4K8ZISWAzJ8X1504ca0zmC%2F0b21a1c6246add355e55816278ef54bc%2FBasic.png&demo-title=Monorepo+with+Turborepo&demo-url=https%3A%2F%2Fexamples-basic-web.vercel.sh%2F&from=templates&project-name=Monorepo+with+Turborepo&repository-name=monorepo-turborepo&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fturborepo%2Ftree%2Fmain%2Fexamples%2Fbasic&root-directory=apps%2Fdocs&skippable-integrations=1&teamSlug=vercel&utm_source=create-turbo"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://turborepo.com/docs?utm_source"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-        <Button appName="web" className={styles.secondary}>
-          Open alert
-        </Button>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
+  useEffect(() => {
+    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
+    const savedUserId = localStorage.getItem(USER_STORAGE_KEY) ?? `demo-${crypto.randomUUID().slice(0, 8)}`;
+
+    setToken(savedToken);
+    setUserId(savedUserId);
+
+    localStorage.setItem(USER_STORAGE_KEY, savedUserId);
+  }, []);
+
+  const safeUserId = useMemo(() => userId.trim(), [userId]);
+  const safeToken = useMemo(() => token.trim(), [token]);
+
+  const { addDot, clearLocalBoard, lastError, pendingCount, shapes, syncStatus } = useHybridBoard({
+    token: safeToken,
+    userId: safeUserId,
+  });
+
+  return (
+    <main style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
+      <h1 style={{ fontSize: 24, marginBottom: 12 }}>Hybrid board (local-first + private room)</h1>
+
+      <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+        <label style={{ display: "grid", gap: 4 }}>
+          <span>JWT token (required for live sync)</span>
+          <input
+            value={token}
+            onChange={(event) => {
+              const next = event.target.value;
+              setToken(next);
+              localStorage.setItem(TOKEN_STORAGE_KEY, next);
+            }}
+            placeholder="Paste token from sign-in"
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
           />
-          Examples
-        </a>
-        <a
-          href="https://turborepo.com?utm_source=create-turbo"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
+        </label>
+
+        <label style={{ display: "grid", gap: 4 }}>
+          <span>User id</span>
+          <input
+            value={userId}
+            onChange={(event) => {
+              const next = event.target.value;
+              setUserId(next);
+              localStorage.setItem(USER_STORAGE_KEY, next);
+            }}
+            placeholder="user id"
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d1d5db" }}
           />
-          Go to turborepo.com →
-        </a>
-      </footer>
-    </div>
+        </label>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <strong>Status:</strong>
+        <span>{getStatusLabel(syncStatus)}</span>
+        <span>Pending ops: {pendingCount}</span>
+        {lastError ? <span style={{ color: "#dc2626" }}>Last error: {lastError}</span> : null}
+        <button
+          onClick={clearLocalBoard}
+          style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #d1d5db", background: "white" }}
+        >
+          Clear local board
+        </button>
+      </div>
+
+      <div
+        onClick={(event) => {
+          const target = event.currentTarget;
+          const rect = target.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          addDot(x, y);
+        }}
+        style={{
+          height: 520,
+          border: "1px solid #d1d5db",
+          borderRadius: 12,
+          position: "relative",
+          cursor: "crosshair",
+          overflow: "hidden",
+          background: "#ffffff",
+        }}
+      >
+        {shapes.map((shape) => (
+          <div
+            key={shape.id}
+            style={{
+              width: shape.size,
+              height: shape.size,
+              position: "absolute",
+              left: shape.x - shape.size / 2,
+              top: shape.y - shape.size / 2,
+              borderRadius: "9999px",
+              background: shape.color,
+            }}
+          />
+        ))}
+      </div>
+    </main>
   );
 }
