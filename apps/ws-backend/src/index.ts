@@ -50,6 +50,8 @@ const IncomingMessageSchema = z.discriminatedUnion("type", [
     DrawMessageSchema
 ]);
 
+const PRIVATE_ROOM_PREFIX = "private-";
+
 // Room ID -> Array of users in that room
 // Example: { "room-abc": [User1, User2], "room-xyz": [User3] }
 const rooms = new Map<string, User[]>();
@@ -146,9 +148,21 @@ wss.on("connection", (ws: WebSocket) => {
                     return;
                 }
 
-                const room = await prismaClient.room.findUnique({
+                const existingRoom = await prismaClient.room.findUnique({
                     where: { slug: roomId }
-                })
+                });
+
+                const room = existingRoom ?? (
+                    roomId.startsWith(PRIVATE_ROOM_PREFIX)
+                        ? await prismaClient.room.create({
+                            data: {
+                                slug: roomId,
+                                adminId: userId
+                            }
+                        })
+                        : null
+                );
+
                 if (!room) {
                     ws.send(JSON.stringify({
                         type: "error",
@@ -222,7 +236,7 @@ wss.on("connection", (ws: WebSocket) => {
         }
     });
 
-    wss.on("close", () => {
+    ws.on("close", () => {
         if (!currentUser) return;
 
         removeUserFromRoom(currentUser, ws);
