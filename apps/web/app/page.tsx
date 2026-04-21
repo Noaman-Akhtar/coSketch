@@ -100,7 +100,7 @@ export default function Home() {
           background: "#ffffff",
         }}
       >
-        {shapes.map((shape) => (
+        {shapes.map((shape:any) => (
           <div
             key={shape.id}
             style={{
